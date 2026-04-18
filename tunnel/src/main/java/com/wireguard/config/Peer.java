@@ -61,7 +61,7 @@ public final class Peer {
         final Builder builder = new Builder();
         for (final CharSequence line : lines) {
             final String trimmed = line.toString().trim();
-            if (trimmed.startsWith("#@")) {
+            if (trimmed.startsWith("#")) {
                 builder.addExtraLine(trimmed);
                 continue;
             }

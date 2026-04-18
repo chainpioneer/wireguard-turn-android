@@ -70,6 +70,9 @@ public final class Interface {
             throws BadConfigException {
         final Builder builder = new Builder();
         for (final CharSequence line : lines) {
+            final String trimmed = line.toString().trim();
+            if (trimmed.startsWith("#"))
+                continue;
             final Attribute attribute = Attribute.parse(line).orElseThrow(() ->
                     new BadConfigException(Section.INTERFACE, Location.TOP_LEVEL,
                             Reason.SYNTAX_ERROR, line));
