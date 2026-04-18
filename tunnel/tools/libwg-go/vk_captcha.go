@@ -107,38 +107,24 @@ func (e *VkCaptchaError) IsCaptchaError() bool {
 // captchaMutex serializes captcha solving to avoid multiple concurrent attempts
 var captchaMutex sync.Mutex
 
-// solveVkCaptcha solves the VK Not Robot Captcha and returns success_token
-// First tries automatic solution, falls back to WebView if it fails
+// solveVkCaptcha solves the VK Not Robot Captcha via WebView.
+// The automatic solver is disabled because it burns the captcha session's
+// attempt budget, causing the WebView fallback to show "too many attempts".
 func solveVkCaptcha(ctx context.Context, captchaErr *VkCaptchaError) (string, error) {
-	// Serialize captcha solving to avoid multiple concurrent attempts
 	captchaMutex.Lock()
 	defer captchaMutex.Unlock()
 
-	turnLog("[Captcha] Solving Not Robot Captcha...")
-
-	// Step 1: Try automatic solution
-	turnLog("[Captcha] Attempting automatic solution...")
-	successToken, err := solveVkCaptchaAutomatic(ctx, captchaErr)
-	if err == nil && successToken != "" {
-		turnLog("[Captcha] Automatic solution SUCCESS!")
-		return successToken, nil
-	}
-
-	turnLog("[Captcha] Automatic solution FAILED: %v", err)
-	turnLog("[Captcha] Falling back to WebView...")
-
-	// Step 2: Fall back to WebView
-	turnLog("[Captcha] Opening WebView for manual solving...")
+	turnLog("[Captcha] Solving via WebView...")
 	redirectURICStr := C.CString(captchaErr.RedirectUri)
 	defer C.free(unsafe.Pointer(redirectURICStr))
-	
+
 	cToken := C.requestCaptcha(redirectURICStr)
 	if cToken == nil {
 		return "", fmt.Errorf("WebView captcha solving failed: returned nil token")
 	}
 	defer C.free(unsafe.Pointer(cToken))
-	
-	successToken = C.GoString(cToken)
+
+	successToken := C.GoString(cToken)
 	if successToken == "" {
 		return "", fmt.Errorf("WebView captcha solving failed: returned empty token")
 	}

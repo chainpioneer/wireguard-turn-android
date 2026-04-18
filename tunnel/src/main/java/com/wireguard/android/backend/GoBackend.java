@@ -297,11 +297,17 @@ public final class GoBackend implements Backend {
             final VpnService.Builder builder = service.getBuilder();
             builder.setSession(tunnel.getName());
 
-            for (final String excludedApplication : config.getInterface().getExcludedApplications())
-                builder.addDisallowedApplication(excludedApplication);
-
-            for (final String includedApplication : config.getInterface().getIncludedApplications())
-                builder.addAllowedApplication(includedApplication);
+            final String self = service.getPackageName();
+            if (config.getInterface().getIncludedApplications().isEmpty()) {
+                for (final String excludedApplication : config.getInterface().getExcludedApplications())
+                    builder.addDisallowedApplication(excludedApplication);
+                builder.addDisallowedApplication(self);
+            } else {
+                for (final String includedApplication : config.getInterface().getIncludedApplications()) {
+                    if (!includedApplication.equals(self))
+                        builder.addAllowedApplication(includedApplication);
+                }
+            }
 
             for (final InetNetwork addr : config.getInterface().getAddresses())
                 builder.addAddress(addr.getAddress(), addr.getMask());

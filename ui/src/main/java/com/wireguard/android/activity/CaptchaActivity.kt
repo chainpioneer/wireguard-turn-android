@@ -7,9 +7,6 @@ package com.wireguard.android.activity
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
-import android.net.ConnectivityManager
-import android.net.Network
-import android.net.NetworkCapabilities
 import android.os.Bundle
 import android.util.Log
 import android.webkit.JavascriptInterface
@@ -28,9 +25,6 @@ import java.util.concurrent.TimeUnit
  */
 class CaptchaActivity : AppCompatActivity() {
 
-    private var previousNetwork: Network? = null
-    private var didBindNetwork = false
-
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -42,10 +36,6 @@ class CaptchaActivity : AppCompatActivity() {
             finish()
             return
         }
-
-        // Bypass VPN: bind process to a physical (non-VPN) network
-        // so the WebView can actually reach id.vk.ru
-        bindToPhysicalNetwork()
 
         Log.d(TAG, "Loading captcha page...")
 
@@ -94,53 +84,7 @@ class CaptchaActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * Binds the process to a physical (non-VPN) network so the WebView
-     * can resolve DNS and load the captcha page even when VPN kill-switch is active.
-     */
-    private fun bindToPhysicalNetwork() {
-        try {
-            val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-            previousNetwork = cm.boundNetworkForProcess
-
-            val networks = cm.allNetworks
-            for (network in networks) {
-                val caps = cm.getNetworkCapabilities(network) ?: continue
-                if (caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) continue
-                if (!caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) continue
-
-                cm.bindProcessToNetwork(network)
-                didBindNetwork = true
-                val type = when {
-                    caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "WiFi"
-                    caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "Cellular"
-                    else -> "Other"
-                }
-                Log.d(TAG, "Bound process to physical network: $network ($type)")
-                return
-            }
-            Log.w(TAG, "No physical network found to bind to!")
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to bind to physical network", e)
-        }
-    }
-
-    /**
-     * Restores the previous network binding after captcha is done.
-     */
-    private fun restoreNetworkBinding() {
-        if (!didBindNetwork) return
-        try {
-            val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-            cm.bindProcessToNetwork(previousNetwork)
-            Log.d(TAG, "Restored previous network binding")
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to restore network binding", e)
-        }
-    }
-
     override fun onDestroy() {
-        restoreNetworkBinding()
         super.onDestroy()
         // If activity destroyed without result (back button etc.), deliver empty
         deliverResult("")
