@@ -17,8 +17,10 @@ import com.wireguard.android.model.ObservableTunnel
 import com.wireguard.config.Config
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.BufferedReader
 import java.io.ByteArrayInputStream
@@ -112,11 +114,23 @@ object TunnelImporter {
 
     fun importTunnel(parentFragmentManager: FragmentManager, configText: String, messageCallback: (CharSequence) -> Unit) {
         try {
-            // Ensure the config text is parseable before proceeding…
-            Config.parse(ByteArrayInputStream(configText.toByteArray(StandardCharsets.UTF_8)))
+            val config = Config.parse(ByteArrayInputStream(configText.toByteArray(StandardCharsets.UTF_8)))
 
-            // Config text is valid, now create the tunnel…
-            ConfigNamingDialogFragment.newInstance(configText).show(parentFragmentManager, null)
+            // Check for embedded tunnel name: #@name:TunnelName
+            val nameMatch = Regex("""(?m)^#@name:\s*(.+)\s*$""").find(configText)
+            if (nameMatch != null) {
+                val name = nameMatch.groupValues[1].trim()
+                MainScope().launch {
+                    try {
+                        val tunnel = Application.getTunnelManager().create(name, config)
+                        onTunnelImportFinished(listOf(tunnel), emptyList(), messageCallback)
+                    } catch (e: Throwable) {
+                        onTunnelImportFinished(emptyList(), listOf(e), messageCallback)
+                    }
+                }
+            } else {
+                ConfigNamingDialogFragment.newInstance(configText).show(parentFragmentManager, null)
+            }
         } catch (e: Throwable) {
             onTunnelImportFinished(emptyList(), listOf<Throwable>(e), messageCallback)
         }
